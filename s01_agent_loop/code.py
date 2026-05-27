@@ -83,17 +83,24 @@ def run_bash(command: str) -> str:
 
 # ── The core pattern: a while loop that calls tools until the model stops ──
 def agent_loop(messages: list):
+    loop_count = 0  # 新增：初始化循环计数器
     while True:
+        loop_count += 1  # 新增：每次进入循环时计数器加 1
+        print(f"\n[Debug] >>> 开始执行 Agent 循环的第 {loop_count} 次迭代，等待模型响应...")
+        
         response = client.messages.create(
             model=MODEL, system=SYSTEM, messages=messages,
             tools=TOOLS, max_tokens=8000,
         )
-
+        # 新增：打印模型返回的停止原因（控制循环的核心机制）
+        print(f"[Debug] <<< 模型响应完毕。当前 stop_reason 为: {response.stop_reason}")
+        
         # Append assistant turn
         messages.append({"role": "assistant", "content": response.content})
 
         # If the model didn't call a tool, we're done
         if response.stop_reason != "tool_use":
+            print("[Debug] >>> stop_reason 不是 'tool_use'，Agent 循环结束。") # 新增
             return
 
         # Execute each tool call, collect results
