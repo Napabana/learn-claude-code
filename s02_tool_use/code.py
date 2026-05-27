@@ -64,7 +64,11 @@ def run_bash(command: str) -> str:
 # ═══════════════════════════════════════════════════════════
 
 def safe_path(p: str) -> Path:
+    # 将传入的相对路径拼接到工作目录下，并解析成绝对路径。
+    # 这样可以统一处理 ".."、重复分隔符和符号链接等情况。
     path = (WORKDIR / p).resolve()
+    # 检查解析后的绝对路径是否仍然在工作目录（WORKDIR）内部
+    # 防止路径穿越到工作区外。
     if not path.is_relative_to(WORKDIR):
         raise ValueError(f"Path escapes workspace: {p}")
     return path
@@ -96,6 +100,7 @@ def run_edit(path: str, old_text: str, new_text: str) -> str:
         text = file_path.read_text()
         if old_text not in text:
             return f"Error: text not found in {path}"
+        #只替换第一处的匹配
         file_path.write_text(text.replace(old_text, new_text, 1))
         return f"Edited {path}"
     except Exception as e:
@@ -106,7 +111,9 @@ def run_glob(pattern: str) -> str:
     import glob as g
     try:
         results = []
+        #glob匹配
         for match in g.glob(pattern, root_dir=WORKDIR):
+            #安全检查：确保匹配结果在工作目录内
             if (WORKDIR / match).resolve().is_relative_to(WORKDIR):
                 results.append(match)
         return "\n".join(results) if results else "(no matches)"
@@ -148,6 +155,7 @@ TOOL_HANDLERS = {
 # ═══════════════════════════════════════════════════════════
 
 def agent_loop(messages: list):
+    #模型说要调什么工具 → 查表找函数 → 执行 → 把结果格式化后返回给模型。
     while True:
         response = client.messages.create(
             model=MODEL, system=SYSTEM, messages=messages,
