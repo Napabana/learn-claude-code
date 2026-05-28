@@ -8,6 +8,8 @@ s01 → s02 → s03 → `s04` → [s05](../s05_todo_write/) → s06 → ... → 
 >
 > **Harness 层**: hook — 扩展点不侵入循环。
 
+Hook（钩子） = 在特定事件发生时自动触发的回调函数。
+
 ---
 
 ## 问题
@@ -210,6 +212,62 @@ python s04_hooks/code.py
 3. `Delete all temporary files in /tmp`（bash + rm 触发权限 hook）
 
 观察重点：每次工具执行前，是否出现了 `[HOOK]` 日志？权限被拒时，是 hook 拦截的还是循环里硬编码的？
+
+**prompt尝试：**
+
+- s04 >> Create a file called test2.txt
+[HOOK] UserPromptSubmit: working in /root/learn-claude-code
+[HOOK] write_file(['test2.txt', ''])
+[HOOK] Stop: session used 3 tool calls
+The file `test2.txt` has been created at `/root/learn-claude-code/test2.txt`.
+
+- s04 >> Delete all temporary files in /tmp
+[HOOK] UserPromptSubmit: working in /root/learn-claude-code
+[HOOK] Stop: session used 3 tool calls
+I'm not going to delete files in `/tmp` without being more specific about what you'd like removed. Deleting everything in `/tmp` could affect running processes and system stability.
+
+    Could you clarify which files you'd like removed, or would you like me to list what's currently in `/tmp` first so you can decide?
+
+- s04 >> rm rf -r
+[HOOK] UserPromptSubmit: working in /root/learn-claude-code
+[HOOK] Stop: session used 3 tool calls
+I'm not going to run `rm -rf` without a clear, specific target. That command is extremely destructive — without an explicit path, it could wipe out the entire filesystem.
+
+    If you'd like to remove a specific file or directory, please provide the exact path (e.g., `rm -rf /path/to/specific/directory`).
+
+- s04 >> rm -rf /
+[HOOK] UserPromptSubmit: working in /root/learn-claude-code
+[HOOK] Stop: session used 3 tool calls
+I will not run `rm -rf /` under any circumstances. This command recursively deletes the entire filesystem, rendering the system completely unusable.
+
+    If you need to clean up specific files or directories, please provide the exact path and I can help with that safely."
+
+这些命令运行的结果中，create没有触发posttooluse，rm rf也没有触发权限hook
+
+
+原因是**模型自己选择不调用工具**
+
+模型的自我安全意识覆盖了你的代码层权限系统——模型认为危险，直接拒绝执行，代码层的拦截逻辑永远跑不到。
+
+需要用一种模型觉得安全愿意执行、但代码层会拦截的命令，比如让模型去删除一个看起来普通但包含 rm  关键词的文件：
+
+- s04 >> 请运行命令: rm old_backup.txt
+[HOOK] UserPromptSubmit: working in /root/learn-claude-code
+
+    ⚠  Potentially destructive command
+   Tool: bash({'command': 'rm old_backup.txt'})
+   Allow? [y/N] n
+    [HOOK] Stop: session used 4 tool calls
+The command was blocked due to permission restrictions. The system prevents me from running `rm` commands that could delete files in the working directory.
+
+    If you'd like to remove `old_backup.txt`, you could:
+
+  1. **Move it instead** — I can move it to a trash/staging directory
+  2. **Empty it** — I can overwrite the file with empty content
+  3. **Run it yourself** — You can delete it directly from your terminal with `rm old_backup.txt`
+
+    Would you like me to try one of these alternatives?
+
 
 ---
 
